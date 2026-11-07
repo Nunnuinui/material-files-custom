@@ -633,6 +633,8 @@
         <item>5</item>
     </string-array>
     <string name="settings_show_home_on_startup_title">起動時にホーム画面を表示</string>
+    <string name="settings_pip_manual_mode_title">PiPを手動で開始する</string>
+    <string name="settings_pip_manual_mode_summary">オンにすると、履歴（アプリ切り替え画面）から別のアプリを開いたときにもPiPを開始します。端末によっては、ホーム画面に戻る操作ではPiPにならなくなることがあります。</string>
     <string name="settings_video_background_playback_title">動画のバックグラウンド再生</string>
     <string name="settings_video_background_playback_summary">オフにすると、アプリを離れたときに動画を一時停止します。音楽は常時バックグラウンド再生します。</string>
     <string name="pdf_viewer_error_open">PDFを開けませんでした</string>
