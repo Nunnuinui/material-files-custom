@@ -290,11 +290,17 @@ class PlayerActivity : AppActivity() {
             // registered params to manual ones, try to enter now,
             // and if that fails, swap the auto-enter params back in
             // so the system can still take over for the gesture.
+            // Build 47 experiment: swapping the params' content did
+            // not cure the refusal, so the registration's existence
+            // itself may be what the system checks. Clear the
+            // registration entirely (null) before entering; on
+            // failure the auto-enter params are re-registered below.
             val manualParams = buildPipParams(forManualEnter = true)
             try {
-                setPictureInPictureParams(manualParams)
+                PipRegistration.clear(this)
+                pipDebug("hint registration cleared")
             } catch (e: Exception) {
-                // Ignore: still try to enter below.
+                pipDebug("hint clear registration threw: $e")
             }
             var entered = false
             try {
