@@ -81,6 +81,15 @@ object Settings {
             R.bool.pref_default_value_show_home_on_startup
         )
 
+    // Custom fork: when off (default), videos pause when the user
+    // leaves the app; when on, videos keep playing in the background
+    // like music does.
+    val VIDEO_BACKGROUND_PLAYBACK: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_video_background_playback,
+            R.bool.pref_default_value_video_background_playback
+        )
+
     val CREATE_ARCHIVE_TYPE: SettingLiveData<Int> =
         ResourceIdSettingLiveData(R.string.pref_key_create_archive_type, R.id.zipRadio)
 
