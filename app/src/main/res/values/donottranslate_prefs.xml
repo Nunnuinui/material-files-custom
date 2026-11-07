@@ -31,6 +31,8 @@
     <bool name="pref_default_value_file_list_show_file_name">true</bool>
     <string name="pref_key_show_home_on_startup">key_show_home_on_startup</string>
     <bool name="pref_default_value_show_home_on_startup">true</bool>
+    <string name="pref_key_video_background_playback">key_video_background_playback</string>
+    <bool name="pref_default_value_video_background_playback">false</bool>
     <string name="pref_key_create_archive_type">key_create_archive_type</string>
 
     <string name="pref_key_ftp_server_state">key_ftp_server_state</string>
