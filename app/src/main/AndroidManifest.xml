@@ -84,6 +84,10 @@
             android:exported="false" />
 
         <activity
+            android:name="me.zhanghai.android.files.home.PdfViewerActivity"
+            android:exported="false" />
+
+        <activity
             android:name="me.zhanghai.android.files.home.DirectoryPickerActivity"
             android:exported="false" />
 
@@ -374,8 +378,9 @@
 
         <activity
             android:name="me.zhanghai.android.files.player.PlayerActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
+            android:supportsPictureInPicture="true"
             android:label="@string/player_title"
             android:theme="@style/Theme.MaterialFiles.Immersive">
             <intent-filter tools:ignore="AppLinkUrlError">
