@@ -104,11 +104,38 @@ class PlaybackService : MediaSessionService() {
         // playing in the background, as before.
         val isVideo = player != null &&
             player.videoSize.width > 0 && player.videoSize.height > 0
+        serviceDebug(
+            "onTaskRemoved isVideo=$isVideo" +
+                " playWhenReady=${player?.playWhenReady}" +
+                " state=${player?.playbackState}" +
+                " items=${player?.mediaItemCount}" +
+                " videoSize=${player?.videoSize?.width}x" +
+                "${player?.videoSize?.height}"
+        )
         if (player == null || isVideo || !player.playWhenReady ||
             player.mediaItemCount == 0 ||
             player.playbackState == Player.STATE_ENDED
         ) {
+            serviceDebug("onTaskRemoved -> stopSelf")
             stopSelf()
+        }
+    }
+
+    private fun serviceDebug(message: String) {
+        try {
+            val downloads = android.os.Environment
+                .getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+            val file = java.io.File(downloads, "mf_pip_debug.txt")
+            val timestamp = java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss", java.util.Locale.US
+            ).format(java.util.Date())
+            java.io.FileWriter(file, true).use {
+                it.append("$timestamp SVC $message\n")
+            }
+        } catch (e: Exception) {
+            // Diagnostics only; never let it affect playback.
         }
     }
 
