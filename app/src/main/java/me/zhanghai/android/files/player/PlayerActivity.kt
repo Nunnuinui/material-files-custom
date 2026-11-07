@@ -591,7 +591,15 @@ class PlayerActivity : AppActivity() {
         // playing in the background. A rotation recreates the activity
         // and must not pause playback. Closing the PiP window counts
         // as leaving for good, so it pauses even with the setting on.
-        val pipDismissed = wasInPip && !isInPipNow()
+        // On the user's Galaxy (Android 16), closing PiP with the X
+        // button stops the activity while isInPictureInPictureMode
+        // still reports true, and the mode-changed(false) callback
+        // only arrives afterwards — so "not in PiP anymore" can never
+        // be observed here. Expanding PiP back to full screen never
+        // stops the activity at all (and clears the latch in
+        // onResume), so a latched wasInPip at onStop time means the
+        // PiP window was dismissed.
+        val pipDismissed = wasInPip
         pipDebug(
             "onStop isVideo=$isVideo wasInPip=$wasInPip" +
                 " inPip=${isInPipNow()} pipDismissed=$pipDismissed"
