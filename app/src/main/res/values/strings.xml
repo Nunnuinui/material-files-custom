@@ -788,6 +788,11 @@
         <item>5</item>
     </string-array>
     <string name="settings_show_home_on_startup_title">Show home screen on startup</string>
+    <string name="settings_video_background_playback_title">Background video playback</string>
+    <string name="settings_video_background_playback_summary">When off, videos pause when you leave the app. Music always keeps playing in the background.</string>
+    <string name="pdf_viewer_error_open">Couldn\'t open this PDF</string>
+    <string name="pip_action_play">Play</string>
+    <string name="pip_action_pause">Pause</string>
     <string name="home_title">Home</string>
     <string name="home_internal_storage">Internal storage</string>
     <string name="home_storage_space">%1$s free of %2$s</string>
