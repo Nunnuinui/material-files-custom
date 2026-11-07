@@ -122,10 +122,10 @@ class PlayerActivity : AppActivity() {
     // until handled in onStop) showing the video in a PiP window.
     private var wasInPip = false
 
-    // True once a PiP entry has been requested for the current
-    // "leaving the app" cycle, so the onPause fallback does not
-    // request it a second time. Cleared when the cycle ends.
-    private var pipEntryRequested = false
+    // True once an app-initiated PiP entry succeeded during the
+    // current "leaving the app" cycle, so the onPause fallback does
+    // not request it again. Cleared in onResume.
+    private var pipEnterSucceeded = false
 
     private val pipToggleReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -257,7 +257,7 @@ class PlayerActivity : AppActivity() {
 
     override fun onResume() {
         super.onResume()
-        pipEntryRequested = false
+        pipEnterSucceeded = false
         // Returning to full screen from PiP (expanding the window):
         // clear the PiP flag without pausing.
         if (wasInPip && !isInPipNow()) {
@@ -286,9 +286,11 @@ class PlayerActivity : AppActivity() {
             isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing
         ) {
-            pipEntryRequested = true
             try {
                 val entered = enterPictureInPictureMode(buildPipParams(forManualEnter = true))
+                if (entered) {
+                    pipEnterSucceeded = true
+                }
                 pipDebug("enterPictureInPictureMode -> $entered")
             } catch (e: Exception) {
                 // PiP unavailable (e.g. turned off in system settings
@@ -301,24 +303,40 @@ class PlayerActivity : AppActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Fallback for the "open another app from Recents" path: on
-        // the user's Galaxy, onUserLeaveHint does not fire at all in
-        // that flow and the auto-enter hook only engages on the way
-        // to the home screen, so the activity ends up stopped with
-        // audio only. onPause is the last callback that runs in every
-        // backgrounding flow, so request PiP here if nobody did yet.
+        // Fallback for the "open another app from Recents" path.
+        // Device findings (user's Galaxy, Android 16): while
+        // auto-enter params are registered with the system, every
+        // app-initiated enterPictureInPictureMode call is refused;
+        // with nothing registered, the manual call succeeds in the
+        // Recents flow but the home gesture can only be covered by
+        // the system's auto-enter. So here, as the last step before
+        // the activity leaves the foreground, replace the registered
+        // params with manual ones (which unregisters auto-enter) and
+        // then request PiP manually. onResume re-registers the
+        // auto-enter params for the next home gesture.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            isVideo && !pipEntryRequested &&
+            isVideo && !pipEnterSucceeded &&
             Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing &&
             !isInPictureInPictureMode
         ) {
-            pipEntryRequested = true
             try {
-                val entered = enterPictureInPictureMode(buildPipParams(forManualEnter = true))
-                pipDebug("onPause enterPictureInPictureMode -> $entered")
+                setPictureInPictureParams(
+                    buildPipParams(forManualEnter = true)
+                )
             } catch (e: Exception) {
-                pipDebug("onPause enterPictureInPictureMode threw: $e")
+                // Ignore: still try to enter below.
+            }
+            try {
+                val entered = enterPictureInPictureMode(
+                    buildPipParams(forManualEnter = true)
+                )
+                if (entered) {
+                    pipEnterSucceeded = true
+                }
+                pipDebug("onPause disarm+enter -> $entered")
+            } catch (e: Exception) {
+                pipDebug("onPause disarm+enter threw: $e")
             }
         }
     }
