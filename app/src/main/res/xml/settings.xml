@@ -81,6 +81,12 @@
             android:title="@string/settings_show_home_on_startup_title"
             android:defaultValue="@bool/pref_default_value_show_home_on_startup" />
 
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_video_background_playback"
+            android:title="@string/settings_video_background_playback_title"
+            android:summary="@string/settings_video_background_playback_summary"
+            android:defaultValue="@bool/pref_default_value_video_background_playback" />
+
         <me.zhanghai.android.files.settings.StoragesPreference
             android:title="@string/settings_storages_title"
             android:summary="@string/settings_storages_summary_empty" />
