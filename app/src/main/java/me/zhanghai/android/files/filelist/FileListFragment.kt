@@ -72,6 +72,7 @@ import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.isApk
 import me.zhanghai.android.files.file.isAudio
 import me.zhanghai.android.files.file.isImage
+import me.zhanghai.android.files.file.isPdf
 import me.zhanghai.android.files.file.isVideo
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
@@ -1294,6 +1295,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // first (File Manager Plus style); its play button hands
             // videos over to the built-in player.
             startActivitySafe(createMediaViewerIntent(file))
+            return
+        }
+        if (!withChooser && !path.isArchivePath && mimeType.isPdf) {
+            // Custom fork: PDFs open in the built-in PDF viewer.
+            startActivitySafe(
+                me.zhanghai.android.files.home.PdfViewerActivity
+                    .createIntent(requireContext(), path)
+            )
             return
         }
         if (path.isArchivePath) {
