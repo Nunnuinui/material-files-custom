@@ -13,8 +13,17 @@
 package me.zhanghai.android.files.player
 
 import android.Manifest
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
+import android.util.Rational
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -24,6 +33,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import android.view.TextureView
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -64,8 +77,10 @@ import me.zhanghai.android.files.file.isVideo
 import androidx.appcompat.widget.PopupMenu
 import me.zhanghai.android.files.home.applySystemBarInsetsPadding
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.extraPathList
+import me.zhanghai.android.files.util.valueCompat
 
 class PlayerActivity : AppActivity() {
     private var playerView: PlayerView? = null
@@ -96,6 +111,27 @@ class PlayerActivity : AppActivity() {
     private var resizeIndex = 0
     private var rotatedLandscape = false
 
+    // Pinch zoom state for the video surface (TextureView).
+    private var videoSurface: TextureView? = null
+    private var videoZoom = 1f
+    private var videoPanX = 0f
+    private var videoPanY = 0f
+
+    // Picture-in-picture state: true while this activity is (or was,
+    // until handled in onStop) showing the video in a PiP window.
+    private var wasInPip = false
+
+    private val pipToggleReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val mediaController = controller ?: return
+            if (mediaController.isPlaying) {
+                mediaController.pause()
+            } else {
+                mediaController.play()
+            }
+        }
+    }
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var pendingItems: List<MediaItem>? = null
@@ -104,6 +140,8 @@ class PlayerActivity : AppActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            resetVideoZoom()
+            updatePipParams()
             updateInfo(mediaItem)
             updatePlayButton()
             updateProgress()
@@ -114,6 +152,7 @@ class PlayerActivity : AppActivity() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updatePipParams()
             updatePlayButton()
         }
 
@@ -189,12 +228,110 @@ class PlayerActivity : AppActivity() {
             setupAudioViews()
         }
         updateModeButtons(null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.registerReceiver(
+                this, pipToggleReceiver,
+                IntentFilter(ACTION_PIP_TOGGLE_PLAY_PAUSE),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        }
         maybeRequestNotificationPermission()
+    }
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                unregisterReceiver(pipToggleReceiver)
+            } catch (e: Exception) {
+                // Not registered (should not happen).
+            }
+        }
+        super.onDestroy()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // With background video playback enabled, leaving the app
+        // during a video enters picture-in-picture so the user keeps
+        // watching in a small window.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
+            controller != null && !isFinishing
+        ) {
+            try {
+                enterPictureInPictureMode(buildPipParams())
+            } catch (e: Exception) {
+                // PiP unavailable (e.g. turned off in system settings
+                // for this app): playback simply continues in the
+                // background.
+            }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean, newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        wasInPip = isInPictureInPictureMode
+        playerView?.useController = !isInPictureInPictureMode
+    }
+
+    private fun isInPipNow(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            isInPictureInPictureMode
+
+    private fun buildPipParams(): PictureInPictureParams {
+        val mediaController = controller
+        val size = mediaController?.videoSize
+        val ratio = if (size != null && size.width > 0 && size.height > 0 &&
+            size.width.toFloat() / size.height in 0.42f..2.39f
+        ) {
+            Rational(size.width, size.height)
+        } else {
+            Rational(16, 9)
+        }
+        val playing = mediaController?.isPlaying == true
+        val iconRes = if (playing) R.drawable.player_pause else R.drawable.player_play
+        val title = getString(
+            if (playing) R.string.pip_action_pause else R.string.pip_action_play
+        )
+        val toggleIntent = PendingIntent.getBroadcast(
+            this, PIP_TOGGLE_REQUEST_CODE,
+            Intent(ACTION_PIP_TOGGLE_PLAY_PAUSE).setPackage(packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val toggleAction = RemoteAction(
+            Icon.createWithResource(this, iconRes), title, title, toggleIntent
+        )
+        return PictureInPictureParams.Builder()
+            .setAspectRatio(ratio)
+            .setActions(listOf(toggleAction))
+            .build()
+    }
+
+    private fun updatePipParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            !isVideo || isFinishing
+        ) {
+            return
+        }
+        try {
+            setPictureInPictureParams(buildPipParams())
+        } catch (e: Exception) {
+            // Not in a state where PiP params can be set; the params
+            // are rebuilt when entering PiP anyway.
+        }
     }
 
     private fun setupVideoViews() {
         val view = findViewById<PlayerView>(R.id.player_view)
         playerView = view
+        // Pinch zoom on the video surface (a TextureView, so it can be
+        // scaled and panned with regular view transforms).
+        (view.videoSurfaceView as? TextureView)?.let { surface ->
+            videoSurface = surface
+            setupVideoZoom(surface)
+        }
         // The fullscreen button is wired manually as well, so its
         // icon is the app's own (enter/exit) instead of Media3's.
         fullscreenButton = findViewById(R.id.fullscreen_button)
@@ -233,6 +370,97 @@ class PlayerActivity : AppActivity() {
                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
         }
+    }
+
+    private fun setupVideoZoom(surface: TextureView) {
+        val scaleDetector = ScaleGestureDetector(
+            this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    videoZoom = (videoZoom * detector.scaleFactor)
+                        .coerceIn(1f, MAX_VIDEO_ZOOM)
+                    if (videoZoom <= 1f) {
+                        videoPanX = 0f
+                        videoPanY = 0f
+                    } else {
+                        clampVideoPan()
+                    }
+                    applyVideoTransform()
+                    return true
+                }
+            }
+        )
+        val gestureDetector = GestureDetector(
+            this,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    // The surface claims every touch (see below), so
+                    // the tap-to-toggle-controller behavior of the
+                    // PlayerView is re-implemented here.
+                    val view = playerView ?: return true
+                    if (view.isControllerFullyVisible) {
+                        view.hideController()
+                    } else {
+                        view.showController()
+                    }
+                    return true
+                }
+
+                override fun onScroll(
+                    e1: MotionEvent?, e2: MotionEvent,
+                    distanceX: Float, distanceY: Float
+                ): Boolean {
+                    if (videoZoom <= 1f) {
+                        return false
+                    }
+                    videoPanX -= distanceX
+                    videoPanY -= distanceY
+                    clampVideoPan()
+                    applyVideoTransform()
+                    return true
+                }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    resetVideoZoom()
+                    return true
+                }
+            }
+        )
+        // The surface must claim the whole touch stream from the
+        // first ACTION_DOWN on; returning false for the down event
+        // (as the first version did unless a scale was already in
+        // progress) makes the framework deliver the rest of the
+        // gesture to the PlayerView instead, so pinch never started.
+        surface.setOnTouchListener { _, event ->
+            scaleDetector.onTouchEvent(event)
+            gestureDetector.onTouchEvent(event)
+            true
+        }
+    }
+
+    private fun clampVideoPan() {
+        val surface = videoSurface ?: return
+        val maxX = surface.width * (videoZoom - 1f) / 2f
+        val maxY = surface.height * (videoZoom - 1f) / 2f
+        videoPanX = videoPanX.coerceIn(-maxX, maxX)
+        videoPanY = videoPanY.coerceIn(-maxY, maxY)
+    }
+
+    private fun applyVideoTransform() {
+        val surface = videoSurface ?: return
+        surface.scaleX = videoZoom
+        surface.scaleY = videoZoom
+        surface.translationX = videoPanX
+        surface.translationY = videoPanY
+    }
+
+    private fun resetVideoZoom() {
+        videoZoom = 1f
+        videoPanX = 0f
+        videoPanY = 0f
+        applyVideoTransform()
     }
 
     private fun setupAudioViews() {
@@ -302,6 +530,20 @@ class PlayerActivity : AppActivity() {
     }
 
     override fun onStop() {
+        // Videos pause when the user leaves the app, unless the
+        // background video playback setting is on; music always keeps
+        // playing in the background. A rotation recreates the activity
+        // and must not pause playback. Closing the PiP window counts
+        // as leaving for good, so it pauses even with the setting on.
+        val pipDismissed = wasInPip && !isInPipNow()
+        if (pipDismissed) {
+            wasInPip = false
+        }
+        if (isVideo && !isChangingConfigurations &&
+            (pipDismissed || !Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat)
+        ) {
+            controller?.pause()
+        }
         progressHandler.removeCallbacks(progressUpdater)
         playerView?.player = null
         controller?.removeListener(playerListener)
@@ -560,6 +802,10 @@ class PlayerActivity : AppActivity() {
     companion object {
         private val COLOR_INACTIVE = Color.argb(140, 255, 255, 255)
         private const val PROGRESS_INTERVAL_MS = 500L
+        private const val MAX_VIDEO_ZOOM = 5f
+        private const val ACTION_PIP_TOGGLE_PLAY_PAUSE =
+            "me.zhanghai.android.files.player.PIP_TOGGLE_PLAY_PAUSE"
+        private const val PIP_TOGGLE_REQUEST_CODE = 1001
         private val SPEED_OPTIONS = listOf(
             0.25f to "0.25X",
             0.5f to "0.5X",
