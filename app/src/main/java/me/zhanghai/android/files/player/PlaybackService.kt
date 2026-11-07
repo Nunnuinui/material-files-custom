@@ -117,6 +117,15 @@ class PlaybackService : MediaSessionService() {
             player.playbackState == Player.STATE_ENDED
         ) {
             serviceDebug("onTaskRemoved -> stopSelf")
+            if (isVideo) {
+                // Stop the player itself as well: stopSelf alone
+                // does not end playback while controllers (such as
+                // the system's media controls) are still connected
+                // to the session, which left the audio playing.
+                player?.pause()
+                player?.stop()
+                player?.clearMediaItems()
+            }
             stopSelf()
         }
     }
