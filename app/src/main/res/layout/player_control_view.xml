@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Custom controller for the video player, modeled on the File Manager
-     Plus player UI: top bar with back/title/fullscreen, seek bar with
-     times, a row with shuffle / rewind / speed / fast-forward / repeat,
-     and a row with aspect / previous / big play / next / rotate.
-     Only exo_progress / exo_position / exo_duration / exo_fullscreen are
-     bound by Media3's PlayerControlView; the transport buttons use own
-     ids and are wired in PlayerActivity, because Media3 1.8's styled
+     Plus player UI: top bar with back/title, seek bar with times,
+     a row with shuffle / rewind / speed / fast-forward / repeat,
+     and a row with fullscreen / previous / big play / next / rotate.
+     Only exo_progress / exo_position / exo_duration are bound by
+     Media3's PlayerControlView; the transport buttons use own ids and
+     are wired in PlayerActivity, because Media3 1.8's styled
      controller does not bind the legacy exo_play/exo_pause ids. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -41,14 +41,6 @@
             android:maxLines="1"
             android:textColor="@android:color/white"
             android:textSize="16sp" />
-
-        <ImageButton
-            android:id="@+id/fullscreen_button"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/player_fullscreen"
-            android:src="@drawable/player_fullscreen_enter" />
 
     </LinearLayout>
 
@@ -179,13 +171,13 @@
             android:orientation="horizontal">
 
             <ImageButton
-                android:id="@+id/aspect_button"
+                android:id="@+id/fullscreen_button"
                 android:layout_width="0dp"
                 android:layout_height="56dp"
                 android:layout_weight="1"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/player_aspect"
-                android:src="@drawable/player_aspect" />
+                android:contentDescription="@string/player_fullscreen"
+                android:src="@drawable/player_fullscreen_enter" />
 
             <ImageButton
                 android:id="@+id/prev_button"
