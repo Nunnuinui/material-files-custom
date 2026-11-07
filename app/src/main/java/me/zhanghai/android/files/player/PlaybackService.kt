@@ -10,12 +10,17 @@ package me.zhanghai.android.files.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
@@ -44,6 +49,46 @@ class PlaybackService : MediaSessionService() {
         )
         mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(sessionActivity)
+            .setCallback(object : MediaSession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo
+                ): MediaSession.ConnectionResult {
+                    val sessionCommands =
+                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                            .buildUpon()
+                            .add(
+                                SessionCommand(
+                                    ACTION_STOP_AND_DISMISS, Bundle.EMPTY
+                                )
+                            )
+                            .build()
+                    return MediaSession.ConnectionResult
+                        .AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(sessionCommands)
+                        .build()
+                }
+
+                override fun onCustomCommand(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    customCommand: SessionCommand,
+                    args: Bundle
+                ): ListenableFuture<SessionResult> {
+                    if (customCommand.customAction == ACTION_STOP_AND_DISMISS) {
+                        // The user dismissed playback for good (e.g.
+                        // closed the PiP window): stop, clear the
+                        // playlist and end the service so the media
+                        // notification disappears as well.
+                        session.player.stop()
+                        session.player.clearMediaItems()
+                        stopSelf()
+                    }
+                    return Futures.immediateFuture(
+                        SessionResult(SessionResult.RESULT_SUCCESS)
+                    )
+                }
+            })
             .build()
     }
 
@@ -67,5 +112,10 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    companion object {
+        const val ACTION_STOP_AND_DISMISS =
+            "me.zhanghai.android.files.player.STOP_AND_DISMISS"
     }
 }
