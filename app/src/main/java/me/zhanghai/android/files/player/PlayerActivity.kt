@@ -58,6 +58,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -607,8 +608,19 @@ class PlayerActivity : AppActivity() {
         if (pipDismissed) {
             wasInPip = false
         }
-        if (isVideo && !isChangingConfigurations &&
-            (pipDismissed || !Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat)
+        if (isVideo && !isChangingConfigurations && pipDismissed) {
+            // Dismissed for good (PiP closed with X): pause right away
+            // and tell the service to stop entirely, which also
+            // removes the media notification.
+            controller?.pause()
+            controller?.sendCustomCommand(
+                SessionCommand(
+                    PlaybackService.ACTION_STOP_AND_DISMISS, Bundle.EMPTY
+                ),
+                Bundle.EMPTY
+            )
+        } else if (isVideo && !isChangingConfigurations &&
+            !Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat
         ) {
             controller?.pause()
         }
