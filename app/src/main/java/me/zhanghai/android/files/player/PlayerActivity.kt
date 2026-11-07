@@ -288,7 +288,7 @@ class PlayerActivity : AppActivity() {
         ) {
             pipEntryRequested = true
             try {
-                val entered = enterPictureInPictureMode(buildPipParams())
+                val entered = enterPictureInPictureMode(buildPipParams(forManualEnter = true))
                 pipDebug("enterPictureInPictureMode -> $entered")
             } catch (e: Exception) {
                 // PiP unavailable (e.g. turned off in system settings
@@ -315,7 +315,7 @@ class PlayerActivity : AppActivity() {
         ) {
             pipEntryRequested = true
             try {
-                val entered = enterPictureInPictureMode(buildPipParams())
+                val entered = enterPictureInPictureMode(buildPipParams(forManualEnter = true))
                 pipDebug("onPause enterPictureInPictureMode -> $entered")
             } catch (e: Exception) {
                 pipDebug("onPause enterPictureInPictureMode threw: $e")
@@ -361,7 +361,9 @@ class PlayerActivity : AppActivity() {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             isInPictureInPictureMode
 
-    private fun buildPipParams(): PictureInPictureParams {
+    private fun buildPipParams(
+        forManualEnter: Boolean = false
+    ): PictureInPictureParams {
         val mediaController = controller
         val size = mediaController?.videoSize
         val ratio = if (size != null && size.width > 0 && size.height > 0 &&
@@ -387,13 +389,18 @@ class PlayerActivity : AppActivity() {
         val builder = PictureInPictureParams.Builder()
             .setAspectRatio(ratio)
             .setActions(listOf(toggleAction))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !forManualEnter
+        ) {
             // Let the system enter PiP automatically on the leave
             // gesture (Android 12+). The manual call in
             // onUserLeaveHint was refused (returned false) on the
             // user's Galaxy even with every condition in place; the
             // system-initiated path does not depend on the activity's
-            // focus state at that instant.
+            // focus state at that instant. Manual enter requests use
+            // params WITHOUT the auto-enter flag: on that device the
+            // manual call kept being refused while the flag was part
+            // of the request params, so keep the two separate.
             builder.setAutoEnterEnabled(
                 isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat
             )
