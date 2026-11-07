@@ -98,7 +98,14 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0 ||
+        // Swiping the app away from Recents must end video playback:
+        // the picture is gone, so the sound has to stop too (closing
+        // the PiP window already behaves this way). Music may keep
+        // playing in the background, as before.
+        val isVideo = player != null &&
+            player.videoSize.width > 0 && player.videoSize.height > 0
+        if (player == null || isVideo || !player.playWhenReady ||
+            player.mediaItemCount == 0 ||
             player.playbackState == Player.STATE_ENDED
         ) {
             stopSelf()
