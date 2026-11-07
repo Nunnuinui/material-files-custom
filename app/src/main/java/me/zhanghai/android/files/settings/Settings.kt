@@ -90,6 +90,18 @@ object Settings {
             R.bool.pref_default_value_video_background_playback
         )
 
+    // Custom fork: PiP entry strategy. Off (default): the system
+    // auto-enter is registered, which covers leaving via the home
+    // gesture. On: nothing is registered and PiP is requested
+    // manually when leaving, which also covers opening another app
+    // from Recents on devices that refuse manual entry while
+    // auto-enter params are registered.
+    val PIP_MANUAL_MODE: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_pip_manual_mode,
+            R.bool.pref_default_value_pip_manual_mode
+        )
+
     val CREATE_ARCHIVE_TYPE: SettingLiveData<Int> =
         ResourceIdSettingLiveData(R.string.pref_key_create_archive_type, R.id.zipRadio)
 
