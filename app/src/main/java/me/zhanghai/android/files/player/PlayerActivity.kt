@@ -122,6 +122,11 @@ class PlayerActivity : AppActivity() {
     // until handled in onStop) showing the video in a PiP window.
     private var wasInPip = false
 
+    // True once a PiP entry has been requested for the current
+    // "leaving the app" cycle, so the onPause fallback does not
+    // request it a second time. Cleared when the cycle ends.
+    private var pipEntryRequested = false
+
     private val pipToggleReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val mediaController = controller ?: return
@@ -252,6 +257,7 @@ class PlayerActivity : AppActivity() {
 
     override fun onResume() {
         super.onResume()
+        pipEntryRequested = false
         // Returning to full screen from PiP (expanding the window):
         // clear the PiP flag without pausing.
         if (wasInPip && !isInPipNow()) {
@@ -280,6 +286,7 @@ class PlayerActivity : AppActivity() {
             isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing
         ) {
+            pipEntryRequested = true
             try {
                 val entered = enterPictureInPictureMode(buildPipParams())
                 pipDebug("enterPictureInPictureMode -> $entered")
@@ -288,6 +295,30 @@ class PlayerActivity : AppActivity() {
                 // for this app): playback simply continues in the
                 // background.
                 pipDebug("enterPictureInPictureMode threw: $e")
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Fallback for the "open another app from Recents" path: on
+        // the user's Galaxy, onUserLeaveHint does not fire at all in
+        // that flow and the auto-enter hook only engages on the way
+        // to the home screen, so the activity ends up stopped with
+        // audio only. onPause is the last callback that runs in every
+        // backgrounding flow, so request PiP here if nobody did yet.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            isVideo && !pipEntryRequested &&
+            Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
+            controller != null && !isFinishing &&
+            !isInPictureInPictureMode
+        ) {
+            pipEntryRequested = true
+            try {
+                val entered = enterPictureInPictureMode(buildPipParams())
+                pipDebug("onPause enterPictureInPictureMode -> $entered")
+            } catch (e: Exception) {
+                pipDebug("onPause enterPictureInPictureMode threw: $e")
             }
         }
     }
