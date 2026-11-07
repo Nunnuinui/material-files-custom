@@ -122,11 +122,6 @@ class PlayerActivity : AppActivity() {
     // until handled in onStop) showing the video in a PiP window.
     private var wasInPip = false
 
-    // True once an app-initiated PiP entry succeeded during the
-    // current "leaving the app" cycle, so the onPause fallback does
-    // not request it again. Cleared in onResume.
-    private var pipEnterSucceeded = false
-
     private val pipToggleReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val mediaController = controller ?: return
@@ -257,7 +252,6 @@ class PlayerActivity : AppActivity() {
 
     override fun onResume() {
         super.onResume()
-        pipEnterSucceeded = false
         // Returning to full screen from PiP (expanding the window):
         // clear the PiP flag without pausing.
         if (wasInPip && !isInPipNow()) {
@@ -286,57 +280,38 @@ class PlayerActivity : AppActivity() {
             isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing
         ) {
+            // Device findings (user's Galaxy, Android 16): while
+            // auto-enter params are registered, app-initiated PiP
+            // entry is always refused; with manual params registered,
+            // the same call succeeds in the Recents flow. The home
+            // gesture still refuses manual entry (mid-transition) and
+            // needs the system's auto-enter, which reads the
+            // registered params about a second later. So: swap the
+            // registered params to manual ones, try to enter now,
+            // and if that fails, swap the auto-enter params back in
+            // so the system can still take over for the gesture.
+            val manualParams = buildPipParams(forManualEnter = true)
             try {
-                val entered = enterPictureInPictureMode(buildPipParams(forManualEnter = true))
-                if (entered) {
-                    pipEnterSucceeded = true
-                }
-                pipDebug("enterPictureInPictureMode -> $entered")
+                setPictureInPictureParams(manualParams)
+            } catch (e: Exception) {
+                // Ignore: still try to enter below.
+            }
+            var entered = false
+            try {
+                entered = enterPictureInPictureMode(manualParams)
+                pipDebug("hint disarm+enter -> $entered")
             } catch (e: Exception) {
                 // PiP unavailable (e.g. turned off in system settings
                 // for this app): playback simply continues in the
                 // background.
-                pipDebug("enterPictureInPictureMode threw: $e")
+                pipDebug("hint disarm+enter threw: $e")
             }
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // Fallback for the "open another app from Recents" path.
-        // Device findings (user's Galaxy, Android 16): while
-        // auto-enter params are registered with the system, every
-        // app-initiated enterPictureInPictureMode call is refused;
-        // with nothing registered, the manual call succeeds in the
-        // Recents flow but the home gesture can only be covered by
-        // the system's auto-enter. So here, as the last step before
-        // the activity leaves the foreground, replace the registered
-        // params with manual ones (which unregisters auto-enter) and
-        // then request PiP manually. onResume re-registers the
-        // auto-enter params for the next home gesture.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            isVideo && !pipEnterSucceeded &&
-            Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
-            controller != null && !isFinishing &&
-            !isInPictureInPictureMode
-        ) {
-            try {
-                setPictureInPictureParams(
-                    buildPipParams(forManualEnter = true)
-                )
-            } catch (e: Exception) {
-                // Ignore: still try to enter below.
-            }
-            try {
-                val entered = enterPictureInPictureMode(
-                    buildPipParams(forManualEnter = true)
-                )
-                if (entered) {
-                    pipEnterSucceeded = true
+            if (!entered) {
+                try {
+                    setPictureInPictureParams(buildPipParams())
+                } catch (e: Exception) {
+                    // Ignore: params are re-registered on resume.
                 }
-                pipDebug("onPause disarm+enter -> $entered")
-            } catch (e: Exception) {
-                pipDebug("onPause disarm+enter threw: $e")
             }
         }
     }
