@@ -432,16 +432,18 @@ class PlayerActivity : AppActivity() {
         ) {
             return
         }
-        // EXPERIMENT (build 43): do not register PiP params with the
-        // system at all. Registered auto-enter params made the
-        // system-initiated PiP work on the home gesture, but every
-        // app-initiated enterPictureInPerspectiveMode call kept
-        // returning false on the user's Galaxy. If the registration
-        // itself is what makes the system refuse manual requests,
-        // manual entry (onUserLeaveHint / onPause) should start
-        // working with nothing registered, on every leave path and
-        // on other makers' devices as well.
-        pipDebug("updatePipParams: registration skipped (experiment)")
+        // Register the PiP params (with auto-enter) with the system.
+        // The home gesture can only be covered by this system-driven
+        // auto-enter: at that instant the activity is mid-transition
+        // and app-initiated entry is refused. The Recents path is
+        // covered separately by the disarm-and-enter fallback in
+        // onPause, and onResume re-registers these params afterwards.
+        try {
+            setPictureInPictureParams(buildPipParams())
+        } catch (e: Exception) {
+            // Not in a state where PiP params can be set; the params
+            // are rebuilt when entering PiP anyway.
+        }
     }
 
     private fun setupVideoViews() {
