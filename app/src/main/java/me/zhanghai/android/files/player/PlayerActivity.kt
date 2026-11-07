@@ -249,21 +249,44 @@ class PlayerActivity : AppActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Returning to full screen from PiP (expanding the window):
+        // clear the PiP flag without pausing.
+        if (wasInPip && !isInPipNow()) {
+            wasInPip = false
+        }
+        // (Re)arm the PiP params, including auto-enter, so a setting
+        // change made in the settings screen takes effect without
+        // restarting playback.
+        updatePipParams()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // With background video playback enabled, leaving the app
         // during a video enters picture-in-picture so the user keeps
         // watching in a small window.
+        pipDebug(
+            "onUserLeaveHint isVideo=$isVideo" +
+                " bg=${Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat}" +
+                " controller=${controller != null} finishing=$isFinishing" +
+                " pipFeature=${packageManager.hasSystemFeature(
+                    android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE
+                )} sdk=${Build.VERSION.SDK_INT}"
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing
         ) {
             try {
-                enterPictureInPictureMode(buildPipParams())
+                val entered = enterPictureInPictureMode(buildPipParams())
+                pipDebug("enterPictureInPictureMode -> $entered")
             } catch (e: Exception) {
                 // PiP unavailable (e.g. turned off in system settings
                 // for this app): playback simply continues in the
                 // background.
+                pipDebug("enterPictureInPictureMode threw: $e")
             }
         }
     }
@@ -272,8 +295,34 @@ class PlayerActivity : AppActivity() {
         isInPictureInPictureMode: Boolean, newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        wasInPip = isInPictureInPictureMode
+        pipDebug("onPictureInPictureModeChanged in=$isInPictureInPictureMode")
+        if (isInPictureInPictureMode) {
+            wasInPip = true
+        }
+        // On exit, wasInPip is deliberately NOT cleared here: this
+        // callback fires before onStop when the PiP window is closed
+        // with the X button, and onStop needs the flag to tell a
+        // dismissal (pause) apart from an expansion back to full
+        // screen (handled in onResume).
         playerView?.useController = !isInPictureInPictureMode
+    }
+
+    // Diagnostic trail in Downloads (mf_pip_debug.txt), used to find
+    // out why PiP did not engage on the user's device.
+    private fun pipDebug(message: String) {
+        try {
+            val stamp = java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss", java.util.Locale.US
+            ).format(java.util.Date())
+            @Suppress("DEPRECATION")
+            val dir = android.os.Environment
+                .getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+            java.io.File(dir, "mf_pip_debug.txt").appendText("$stamp $message\n")
+        } catch (e: Exception) {
+            // Diagnostics must never break the app.
+        }
     }
 
     private fun isInPipNow(): Boolean =
@@ -303,10 +352,21 @@ class PlayerActivity : AppActivity() {
         val toggleAction = RemoteAction(
             Icon.createWithResource(this, iconRes), title, title, toggleIntent
         )
-        return PictureInPictureParams.Builder()
+        val builder = PictureInPictureParams.Builder()
             .setAspectRatio(ratio)
             .setActions(listOf(toggleAction))
-            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Let the system enter PiP automatically on the leave
+            // gesture (Android 12+). The manual call in
+            // onUserLeaveHint was refused (returned false) on the
+            // user's Galaxy even with every condition in place; the
+            // system-initiated path does not depend on the activity's
+            // focus state at that instant.
+            builder.setAutoEnterEnabled(
+                isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat
+            )
+        }
+        return builder.build()
     }
 
     private fun updatePipParams() {
@@ -357,10 +417,6 @@ class PlayerActivity : AppActivity() {
         findViewById<View>(R.id.back_button)?.setOnClickListener { finish() }
         findViewById<TextView>(R.id.speed_button)?.let { speedButton ->
             speedButton.setOnClickListener { showSpeedMenu(speedButton) }
-        }
-        findViewById<View>(R.id.aspect_button)?.setOnClickListener {
-            resizeIndex = (resizeIndex + 1) % RESIZE_MODES.size
-            view.resizeMode = RESIZE_MODES[resizeIndex]
         }
         findViewById<View>(R.id.rotate_button)?.setOnClickListener {
             rotatedLandscape = !rotatedLandscape
@@ -536,6 +592,10 @@ class PlayerActivity : AppActivity() {
         // and must not pause playback. Closing the PiP window counts
         // as leaving for good, so it pauses even with the setting on.
         val pipDismissed = wasInPip && !isInPipNow()
+        pipDebug(
+            "onStop isVideo=$isVideo wasInPip=$wasInPip" +
+                " inPip=${isInPipNow()} pipDismissed=$pipDismissed"
+        )
         if (pipDismissed) {
             wasInPip = false
         }
