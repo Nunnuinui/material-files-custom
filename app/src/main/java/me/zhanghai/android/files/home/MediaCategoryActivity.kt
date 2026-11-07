@@ -66,6 +66,7 @@ import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.isAudio
 import me.zhanghai.android.files.file.isImage
+import me.zhanghai.android.files.file.isPdf
 import me.zhanghai.android.files.file.isVideo
 import me.zhanghai.android.files.file.lastModifiedInstant
 import me.zhanghai.android.files.filejob.FileJobService
@@ -1241,6 +1242,10 @@ class MediaCategoryActivity : AppActivity() {
                         mediaPosition
                     )
                 )
+            }
+            mimeType.isPdf -> {
+                // PDFs open in the built-in PDF viewer.
+                startActivitySafe(PdfViewerActivity.createIntent(this, entry.path))
             }
             mimeType.isAudio -> {
                 val sameKind = entries.filter { it.mimeType.isAudio }
