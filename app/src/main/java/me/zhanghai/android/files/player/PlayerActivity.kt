@@ -280,44 +280,26 @@ class PlayerActivity : AppActivity() {
             isVideo && Settings.VIDEO_BACKGROUND_PLAYBACK.valueCompat &&
             controller != null && !isFinishing
         ) {
-            // Device findings (user's Galaxy, Android 16): while
-            // auto-enter params are registered, app-initiated PiP
-            // entry is always refused; with manual params registered,
-            // the same call succeeds in the Recents flow. The home
-            // gesture still refuses manual entry (mid-transition) and
-            // needs the system's auto-enter, which reads the
-            // registered params about a second later. So: swap the
-            // registered params to manual ones, try to enter now,
-            // and if that fails, swap the auto-enter params back in
-            // so the system can still take over for the gesture.
-            // Build 47 experiment: swapping the params' content did
-            // not cure the refusal, so the registration's existence
-            // itself may be what the system checks. Clear the
-            // registration entirely (null) before entering; on
-            // failure the auto-enter params are re-registered below.
-            val manualParams = buildPipParams(forManualEnter = true)
+            // Request PiP manually. In the default mode the system
+            // also has auto-enter params registered and takes over
+            // for the home gesture when this call is refused; in
+            // manual mode (Settings.PIP_MANUAL_MODE) nothing is
+            // registered, which is what lets this call succeed in
+            // the Recents flow on devices that refuse manual entry
+            // while auto-enter params exist.
             try {
-                PipRegistration.clear(this)
-                pipDebug("hint registration cleared")
-            } catch (e: Exception) {
-                pipDebug("hint clear registration threw: $e")
-            }
-            var entered = false
-            try {
-                entered = enterPictureInPictureMode(manualParams)
-                pipDebug("hint disarm+enter -> $entered")
+                val entered = enterPictureInPictureMode(
+                    buildPipParams(forManualEnter = true)
+                )
+                pipDebug(
+                    "hint enter -> $entered" +
+                        " manual=${Settings.PIP_MANUAL_MODE.valueCompat}"
+                )
             } catch (e: Exception) {
                 // PiP unavailable (e.g. turned off in system settings
                 // for this app): playback simply continues in the
                 // background.
-                pipDebug("hint disarm+enter threw: $e")
-            }
-            if (!entered) {
-                try {
-                    setPictureInPictureParams(buildPipParams())
-                } catch (e: Exception) {
-                    // Ignore: params are re-registered on resume.
-                }
+                pipDebug("hint enter threw: $e")
             }
         }
     }
@@ -413,12 +395,17 @@ class PlayerActivity : AppActivity() {
         ) {
             return
         }
+        if (Settings.PIP_MANUAL_MODE.valueCompat) {
+            // Manual mode: register nothing. On the user's Galaxy,
+            // the mere existence of registered auto-enter params
+            // makes the system refuse app-initiated PiP entry, which
+            // is the only entry that works in the Recents flow.
+            return
+        }
         // Register the PiP params (with auto-enter) with the system.
         // The home gesture can only be covered by this system-driven
         // auto-enter: at that instant the activity is mid-transition
-        // and app-initiated entry is refused. The Recents path is
-        // covered separately by the disarm-and-enter fallback in
-        // onPause, and onResume re-registers these params afterwards.
+        // and app-initiated entry is refused.
         try {
             setPictureInPictureParams(buildPipParams())
         } catch (e: Exception) {
