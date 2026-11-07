@@ -87,6 +87,12 @@
             android:summary="@string/settings_video_background_playback_summary"
             android:defaultValue="@bool/pref_default_value_video_background_playback" />
 
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_pip_manual_mode"
+            android:title="@string/settings_pip_manual_mode_title"
+            android:summary="@string/settings_pip_manual_mode_summary"
+            android:defaultValue="@bool/pref_default_value_pip_manual_mode" />
+
         <me.zhanghai.android.files.settings.StoragesPreference
             android:title="@string/settings_storages_title"
             android:summary="@string/settings_storages_summary_empty" />
